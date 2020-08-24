@@ -1,0 +1,235 @@
+---
+title: "Survival Analysis"
+author: "Annie Pogosyan"
+date: "8/24/2020"
+output: pdf_document
+---
+
+\begin{center}
+{\Large \textsc{PSTAT 175 Final Project}}
+\end{center}
+\begin{center}
+Fall 2019
+\end{center}
+
+#Research Question:
+We are interested in how the age of the patient, the state in which the patient lives when they are diagnosed, and how AIDS is transmitted to the patient affect the survival time of that patient from diagnosis to death. In addition, we
+want to see if there is any interaction between any of these covariates: age, state and T.categ.
+
+Moreover, we are interested in whether there is a relationship between death by AIDS and survival time with AIDS in days, then we predict the survival time given their age, what state they live in, and how AIDS was transmitted to them. 
+
+#ignore this rn:
+Data source and Background information:
+
+Our dataset is titled Australian AIDS Survival Data. It is adapted from an example in the
+software package aML and is based on a longitudinal survey conducted in the U.S. We obtained
+our data from a course website, WWS 509 of Princeton University. The dataset includes the
+marriage data of 3371 couples in the US. The unit of observation is the couple and the event of
+interest is divorce, with interview and widowhood treated as censoring events.
+We have three fixed covariates: education of the husband, indicator of the couple's
+ethnicity: whether the couple is mixed and indicator of the husband’s race: whether the husband
+is black.
+The variables are:
+- H.EDU (education of husband), coded as 0 = less than 12 years, 1= 12 to 15 years, 2= 16
+or more years.
+- Mixed (Whether the couple is in mixed ethnicity), coded 1 if the husband and wife have
+different ethnicity 0 otherwise.
+- Black (Whether the husband is African American), coded 1 if the husband is black and 0
+otherwise
+
+#Abstract:
+
+Our data set analyzes patients diagnosed with AIDS in Australia before July 1, 1991.
+In this project, we build a Cox Proportional Hazards model to see how the age, sex, and reported transmission category affect the survival rate of patients with AIDS using the dataset of 2843 patients.
+```{r}
+library(tidyverse)
+library(survival)
+knitr::opts_chunk$set(echo = TRUE)
+Aids2 <- read.csv("~/Desktop/Aids2 (4).csv")
+Aids2$sex<-factor(Aids2$sex) #converting sex to factor, male=2, female=1
+Aids2$status<-factor(Aids2$status) #converting status to factor
+Aids2$time<-Aids2$death-Aids2$diag
+Aids2$status<-as.numeric(Aids2$status)
+```
+
+
+#Log rank test
+After plotting Kaplan-Meier curves, we also conduct log rank test on each variable. The p values for age, state and T.categ are smaller than 0.05, which indicates that these three covariates have significant effect
+on the hazard rate for AIDS patients, and sex does not.
+
+```{r}
+#include 'age'
+cox <- coxph(Surv(time,status)~age+sex+state+T.categ, data=Aids2)
+#do not include 'age'
+cox1 <- coxph(Surv(time,status)~sex+state+T.categ, data=Aids2)
+cox
+cox$loglik
+#Compute the Likelihood Ratio
+lrt <- 2*(cox$loglik[2]-cox1$loglik[2])
+lrt
+#Approximate p with the Chi-squared distribution
+pchisq(lrt,df=1,lower.tail=FALSE)
+```
+the p-value is 1.348529e-07 which is less than .05, so age is significant for survival time for AIDS patients.
+
+```{r}
+#include 'sex'
+cox2 <- coxph(Surv(time,status)~age+sex+state+T.categ, data=Aids2)
+#do not include 'sex'
+cox3 <- coxph(Surv(time,status)~age+state+T.categ, data=Aids2)
+cox2
+cox2$loglik
+#Compute the Likelihood Ratio
+lrt <- 2*(cox2$loglik[2]-cox3$loglik[2])
+lrt
+#Approximate p with the Chi-squared distribution
+pchisq(lrt,df=1,lower.tail=FALSE)
+```
+the p-value is 0.7900275 which is greater than .05, so sex is not significant for survival time for AIDS patients.
+
+```{r}
+#include 'state'
+cox4 <- coxph(Surv(time,status)~age+sex+state+T.categ, data=Aids2)
+#do not include 'state'
+cox5 <- coxph(Surv(time,status)~age+sex+T.categ, data=Aids2)
+cox4
+cox4$loglik
+#Compute the Likelihood Ratio
+lrt <- 2*(cox4$loglik[2]-cox5$loglik[2])
+lrt
+#Approximate p with the Chi-squared distribution
+pchisq(lrt,df=1,lower.tail=FALSE)
+```
+the p-value is 0.03450709 which is less than .05, so state is significant for survival time for AIDS patients.
+
+```{r}
+#include 'T.categ'
+cox6 <- coxph(Surv(time,status)~age+sex+state+T.categ, data=Aids2)
+#do not include 'T.categ'
+cox7 <- coxph(Surv(time,status)~age+sex+state, data=Aids2)
+cox6
+cox6$loglik
+#Compute the Likelihood Ratio
+lrt <- 2*(cox6$loglik[2]-cox7$loglik[2])
+lrt
+#Approximate p with the Chi-squared distribution
+pchisq(lrt,df=1,lower.tail=FALSE)
+```
+the p-value is 1.486986e-07 which is less than .05, so T.categ is significant for survival time for AIDS patients.
+
+
+So, from our chi-squared tests, we can see that our significant covariates are age, state, and T.categ. 
+
+#model building
+Now, we start to build our Cox PH model. We are using the backward elimination method to pick the right set of covariates. First we build a full model with all four covariates. Then we use function “step” in R to apply backward elimination method. The backward elimination process fits all independent variables first and removes them one at a time if they are not significant to the model.
+
+
+To further condense our model and weed out insignificant covariates, we use the step function.
+```{r}
+cox <- coxph(Surv(time,status)~age+sex+state+T.categ, data=Aids2)
+step(cox, direction="backward")
+```
+
+The step function stops at the model with age and T.categ which indicates that we should include those two covariates in our model and we can remove state from our model.
+
+```{r}
+anova(cox)
+```
+
+Then, we use the likelihood tests to select covariates. First we check the anova table for the full model with all corivates. Age and T.categ are significant, as we also discovered from the step function. 
+
+Model Checking Summary:
+Since we are building the Cox PH model, we need to make sure age and T.categ meet
+the Cox PH assumption. We use both residual tests and C-log-log plots to check Cox PH
+assumption.
+
+#Residual tests
+The function cox.zph() performs statistical tests on the PH assumption based on Schoenfeld residuals, to test for independence between residuals and time. We find that the p value of both age and T.categ are less than 0.05. This indicates that the both covariates fail on
+the PH assumption check. As a result, we decide to stratify both age and T.categ.
+
+```{r}
+cox1 <- coxph(Surv(time,status)~age+T.categ, data=Aids2)
+cox1
+cox.zph(cox1)
+```
+
+The coefficient for age is 0.013307 and the hazard ratio is 1.013396. This means that for a one-unit
+increase in age, the hazard rate increases by a factor of 1.013396 (ie: the risk of dying increases by 1% for
+each unit age increases).
+
+#Confidence intervals for each coefficient:
+```{r}
+confint(cox1,level=.95)
+```
+
+#Confidence intervals for the hazard ratios:
+```{r}
+exp(confint(cox1,level=.95))
+```
+
+```{r}
+labs <- c(paste(seq(0, 71.75, by = 10.25), seq(0 + 10.25, 82, by = 10.25),sep = "-"), paste(82, "+", sep = ""))
+labs
+#name new variable age group 
+Aids2$ageGroup = cut(Aids2$age, breaks = c(seq(0, 82, by = 10.25), Inf), labels = labs, right = FALSE)
+```
+
+#C-log-log plot
+Next we check the C-log-log plot. From the C-log-log plot, we can see in the Black
+plot the two lines get across which indicates that Black doesn’t meet the Cox-PH assumption.
+What we are concerned is that H.EDU plot also has the crossing problem which is not shown in
+the cox.zph test. By thinking over on this problem we decide to follow cox.zph test since it
+takes all covariates into consideration when deciding which covariate doesn’t meet the Cox-PH
+assumption, while the C-log-log plot only considers the single covariate. But in our model, we
+are considering the general effect of all these covariates when they are working together.
+Therefore, we decide to stratify the covariate Black only.
+
+
+
+```{r}
+cox2 <- coxph(Surv(time,status)~ageGroup, data=Aids2)
+plot(survfit(cox2,newdata=data.frame(ageGroup=factor(c('0-10.25', '10.25-20.5','20.5-30.75', '30.75-41', '41-51.25', '51.25-61.5', '61.5-71.75', '71.75-82', '82+')))),
+fun="cloglog",col=c("red","pink","blue","yellow","green","orange","purple","steelblue","brown"), xlab="Time in Days",
+main="Comparison of Age Groups",
+ylab="log(-log(S(t)))",lwd=2)
+legend("bottomright",
+       legend=c('0-10.25', '10.25-20.5','20.5-30.75', '30.75-41', '41-51.25', '51.25-61.5', '61.5-71.75', '71.75-82', '82+'),
+pch = rep(15,4),col=c("red","pink","blue","yellow","green","orange","purple","steelblue","brown"))
+```
+
+```{r}
+cox3 <- coxph(Surv(time,status)~T.categ, data=Aids2)
+plot(survfit(cox3, newdata=data.frame(T.categ=factor(c('blood', 'haem','het', 'hs', 'hsid', 'id', 'mother', 'other')))), fun="cloglog",col=c("red","pink","blue","yellow","green","orange","purple","steelblue"),xlab="Time",
+     main="Log-Log Plot for age",
+     ylab="log(-log(S(t)))",lwd=2)
+legend("bottomright",
+       legend=c('blood', 'haem','het', 'hs', 'hsid', 'id', 'mother', 'other'),
+pch = rep(15,4),col=c("red","pink","blue","yellow","green","orange","purple","steelblue"))
+```
+```{r}
+#with 'age'
+cox5 <- coxph(Surv(time,status)~age+T.categ, data=Aids2)
+#without 'age'
+cox4 <- coxph(Surv(time,status)~T.categ, data=Aids2)
+lrt<-2*(cox5$loglik[2]-cox4$loglik[2])
+pchisq(lrt, df=1,lower.tail = FALSE)
+#with 'tgroup'
+cox5 <- coxph(Surv(time,status)~age+T.categ, data=Aids2)
+#without 'tgroup'
+cox6 <- coxph(Surv(time,status)~age, data=Aids2)
+lrt<-2*(cox5$loglik[2]-cox6$loglik[2])
+pchisq(lrt, df=1,lower.tail = FALSE)
+```
+
+H0: The reduced model is preferred (without interaction term) 
+Ha: The full model is preferred (with interaction term).
+```{r}
+cox1.Strat = coxph(Surv(time, status) ~ strata(age) + T.categ, data=Aids2)
+cox1.int = coxph(Surv(time, status) ~ strata(age) * T.categ, data=Aids2)
+
+```
+
+```{r}
+hist(Aids2$time[Aids2$status ==1],breaks=10,col="cyan",
+xlab="Time to Failure", main="Histogram of Events")
+```
